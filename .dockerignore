@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+.DS_Store
+src
+README.md
+Dockerfile
+.dockerignore
+uploads/*
+!uploads/.gitkeep
+data/cakes.json

@@ -4,3 +4,4 @@ uploads/*
 !uploads/.gitkeep
 data/cakes.json
 .DS_Store
+.tools/

@@ -7,8 +7,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '12344444';
 
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
-const DATA_FILE = path.join(__dirname, 'data', 'cakes.json');
+const DATA_ROOT = process.env.DATA_ROOT || __dirname;
+const UPLOADS_DIR = path.join(DATA_ROOT, 'uploads');
+const DATA_FILE = path.join(DATA_ROOT, 'data', 'cakes.json');
 
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(path.dirname(DATA_FILE))) fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
