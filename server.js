@@ -19,8 +19,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const safe = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, safe);
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
   },
 });
 
@@ -34,8 +33,8 @@ const upload = multer({
 });
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h' }));
+app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '30d', immutable: true }));
 
 const readCakes = () => JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
 const writeCakes = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
@@ -46,9 +45,26 @@ function requireAuth(req, res, next) {
   next();
 }
 
-app.get('/api/cakes', (req, res) => {
-  res.json(readCakes());
+const sseClients = new Set();
+function broadcast(event, data) {
+  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const c of sseClients) { try { c.write(msg); } catch {} }
+}
+
+app.get('/api/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('retry: 5000\n\n');
+  const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+  sseClients.add(res);
+  req.on('close', () => { clearInterval(ping); sseClients.delete(res); });
 });
+
+app.get('/api/cakes', (req, res) => res.json(readCakes()));
 
 app.post('/api/login', (req, res) => {
   const { password } = req.body || {};
@@ -70,6 +86,7 @@ app.post('/api/cakes', requireAuth, upload.single('image'), (req, res) => {
   };
   cakes.unshift(cake);
   writeCakes(cakes);
+  broadcast('add', cake);
   res.json(cake);
 });
 
@@ -78,9 +95,10 @@ app.delete('/api/cakes/:id', requireAuth, (req, res) => {
   const idx = cakes.findIndex((c) => c.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'غير موجود' });
   const [removed] = cakes.splice(idx, 1);
-  const filePath = path.join(__dirname, removed.image);
+  const filePath = path.join(DATA_ROOT, removed.image);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   writeCakes(cakes);
+  broadcast('delete', { id: removed.id });
   res.json({ ok: true });
 });
 
@@ -91,5 +109,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`\n  Poshe Sweet & More`);
   console.log(`  → http://localhost:${PORT}`);
-  console.log(`  → http://localhost:${PORT}/dashboard.html  (كلمة السر: ${ADMIN_PASSWORD})\n`);
+  console.log(`  → http://localhost:${PORT}/dashboard.html\n`);
 });
